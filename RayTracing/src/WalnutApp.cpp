@@ -1,6 +1,6 @@
+#include <cmath>
 #include "Walnut/Application.h"
 #include "Walnut/EntryPoint.h"
-
 #include "Walnut/Image.h"
 #include "Walnut/Random.h"
 #include "Walnut/Timer.h"
@@ -19,7 +19,7 @@ public:
 		ImGui::DragFloat("m_spherePos.y", &m_spherePos.y, 0.1, -10, 10);
 		ImGui::DragFloat("m_spherePos.z", &m_spherePos.z, 0.1, -10, 10);
 		ImGui::DragFloat("m_sphereRadius", &m_sphereRadius, 0.1, 0, 10);
-		
+
 		ImGui::End();
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -65,17 +65,26 @@ public:
 
 				glm::vec3 rayStart = m_cameraCenter + m_cameraSize * uv;
 
-				int intersects = IntersectsSphere(rayStart, m_cameraFacing, m_spherePos, m_sphereRadius);
+				float intersects = IntersectsSphere(rayStart, m_cameraFacing, m_spherePos, m_sphereRadius);
+
+
 
 				uint8_t a = 0xFF;
-				uint8_t r = 0x00;
-				uint8_t g = 0x00;
-				uint8_t b = 0x00;
+				uint8_t r = ((uv.z + 1) / 2) * 128;
+				uint8_t g = ((uv.z + 1) / 2) * 128;
+				uint8_t b = 256 - ((uv.z + 1) / 2) * 200;
 
 				if (intersects != -1) {
-					r = 0xFF;
-					g = 0xFF;
-					b = 0xFF;
+					glm::vec3 pos = rayStart + m_cameraFacing * intersects;
+					glm::vec3 normal = GetSphereNormal(m_spherePos, pos);
+
+					glm::vec3 vectoLight = glm::normalize(m_lamp - pos);
+
+					float intensity = glm::dot(normal, vectoLight);
+
+					r = static_cast<uint8_t>(fmax(0,fmin(intensity * 128, 255)));
+					g = static_cast<uint8_t>(fmax(0,fmin(intensity * 128, 255)));
+					b = static_cast<uint8_t>(fmax(0,fmin(intensity * 128, 255)));
 				}
 
 				uint8_t* vp = (uint8_t*)m_ImageData + (index * sizeof(uint32_t));
@@ -91,21 +100,17 @@ public:
 		m_LastRenderTime = timer.ElapsedMillis();
 	}
 
-	int IntersectsSphere(glm::vec3 rayStart, glm::vec3 rayDirection, glm::vec3 sphereCenter, float radius) {
-		float a = powf(rayDirection.x, 2) + powf(rayDirection.y, 2) + powf(rayDirection.z, 2);
-		float b = 2 * (rayStart.x * rayDirection.x - rayDirection.x * sphereCenter.x +
-			rayStart.y * rayDirection.y - rayDirection.y * sphereCenter.y +
-			rayStart.z * rayDirection.z - rayDirection.z * sphereCenter.z);
-		float c = powf(rayStart.x, 2) - 2 * rayStart.x * sphereCenter.x + powf(sphereCenter.x, 2) +
-			powf(rayStart.y, 2) - 2 * rayStart.y * sphereCenter.y + powf(sphereCenter.y, 2) +
-			powf(rayStart.z, 2) - 2 * rayStart.z * sphereCenter.z + powf(sphereCenter.z, 2) -
-			powf(radius, 2);
+	float IntersectsSphere(glm::vec3 rayStart, glm::vec3 rayDirection, glm::vec3 sphereCenter, float radius) {
+		float a = glm::dot(rayDirection,rayDirection);
+		float b = 2 * glm::dot(rayDirection, (rayStart - sphereCenter));
+		float c = glm::dot(rayStart-sphereCenter,rayStart-sphereCenter) - powf(radius, 2);
 
 		if (powf(b, 2) - 4 * a * c >= 0) {
-			float tp = -b + sqrtf(powf(b, 2) - 4 * a * c >= 0) / 2 * a;
-			float tn = -b - sqrtf(powf(b, 2) - 4 * a * c >= 0) / 2 * a;
+			float tp = -b + sqrtf(powf(b, 2) - 4 * a * c) / (2 * a);
+			float tn = -b - sqrtf(powf(b, 2) - 4 * a * c) / (2 * a);
+
 			if (tp >= 0 || tn >= 0) {
-				return 1;
+				return fmax(fmin(tp, tn), 0)/2;
 			}
 			else {
 				return -1;
@@ -115,20 +120,23 @@ public:
 			return -1;
 		}
 	}
+
+	glm::vec3 GetSphereNormal(glm::vec3 SphereCenter, glm::vec3 SamplePoint) {
+		return glm::normalize(SamplePoint - SphereCenter);
+	}
 private:
 	std::shared_ptr<Image> m_Image;
 	uint32_t* m_ImageData = nullptr;
 	uint32_t m_ViewportWidth = 0, m_ViewportHeight = 0;
 
-	glm::vec3 m_cameraCenter = glm::vec3(0, -5, 1);
-	glm::vec3 m_cameraFacing = glm::vec3(0, 1, 0);
-	glm::vec3 m_cameraSize;
+	glm::vec3 m_cameraCenter = glm::vec3(0, -50, 1);
+	glm::vec3 m_cameraFacing = glm::normalize(glm::vec3(0, 1, 0));
+	glm::vec3 m_lamp = glm::vec3(10, 0, -5);
+	glm::vec3 m_cameraSize = glm::vec3(0, 0, 0);
 	float m_cameraWidth = 16;
 
 	glm::vec3 m_spherePos = glm::vec3(2, 0, 1);
 	float m_sphereRadius = 2;
-
-
 
 	float m_LastRenderTime = 0.0f;
 };
